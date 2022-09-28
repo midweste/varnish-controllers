@@ -135,12 +135,6 @@ class ClpVarnish
             if (false === empty($_POST)) {
                 return false;
             }
-            if (true === function_exists('is_user_logged_in')) {
-                $isUserLoggedIn = is_user_logged_in();
-                if (true === $isUserLoggedIn) {
-                    return false;
-                }
-            }
             $excludedParams = (array)$this->getExcludedParams();
             if (false === empty($excludedParams)) {
                 foreach ($excludedParams as $excludedParam) {
