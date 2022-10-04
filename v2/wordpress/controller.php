@@ -3,7 +3,7 @@
 // ini_set('display_errors', 1);
 // error_reporting((E_ALL | E_STRICT) ^ E_NOTICE);
 
-define('VARNISH_DEVELOPER_MODE', true);
+define('VARNISH_DEVELOPER_MODE', false);
 define('VARNISH_WORDPRESS_CONTROLLER_VERSION', '0.0.1');
 
 $currentUser = get_current_user();
