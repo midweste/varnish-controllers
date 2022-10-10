@@ -19,7 +19,7 @@ class ClpVarnish
     private $purgeLogfile = '';
     private $server = '';
     private $isCacheable = true;
-    private $cacheTagPrefix = '';
+    static private $cacheTagPrefix = '';
     static private $cacheLifetime = 0;
     static private $cacheTags = [];
     private $excludes = [];
@@ -56,14 +56,14 @@ class ClpVarnish
         return $this->purgeLogfile;
     }
 
-    public function setCacheTagPrefix($cacheTagPrefix): void
+    static public function setCacheTagPrefix($cacheTagPrefix): void
     {
-        $this->cacheTagPrefix = $cacheTagPrefix;
+        self::$cacheTagPrefix = $cacheTagPrefix;
     }
 
-    public function getCacheTagPrefix(): string
+    static public function getCacheTagPrefix(): string
     {
-        return $this->cacheTagPrefix;
+        return self::$cacheTagPrefix;
     }
 
     static public function setCacheLifetime($cacheLifetime): void
