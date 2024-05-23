@@ -6,12 +6,6 @@
 define('VARNISH_DEVELOPER_MODE', false);
 define('VARNISH_GENERIC_CONTROLLER_VERSION', '0.0.1');
 
-$currentUser = get_current_user();
-$currentDirectory = sprintf('%s/', rtrim(dirname(__FILE__), '/'));
-$settingsFile = sprintf('%s/settings.json', rtrim($currentDirectory, '/'));
-$logDirectory = sprintf('/home/%s/logs/varnish-cache/', $currentUser);
-$varnishPurgeLogfile = sprintf('%s/purge.log', rtrim($logDirectory, '/'));
-
 class ClpVarnish
 {
     private $enabled = false;
@@ -235,39 +229,47 @@ class ClpVarnish
             $dateTime = new \DateTime('now', new \DateTimeZone('UTC'));
             $logMessage = sprintf('%s, %s', $dateTime->format('Y-m-d H:i:s'), print_r($data, true));
             $purgeLogfile = $this->getPurgeLogfile();
-            file_put_contents($purgeLogfile, $logMessage.PHP_EOL, FILE_APPEND | LOCK_EX);
+            file_put_contents($purgeLogfile, $logMessage . PHP_EOL, FILE_APPEND | LOCK_EX);
         }
     }
 }
 
-if (true === file_exists($settingsFile)) {
-    if (false === file_exists($logDirectory)) {
-        @mkdir($logDirectory, 0770, true);
+call_user_func(function () {
+    $currentUser = get_current_user();
+    $currentDirectory = sprintf('%s/', rtrim(dirname(__FILE__), '/'));
+    $settingsFile = sprintf('%s/settings.json', rtrim($currentDirectory, '/'));
+    $logDirectory = sprintf('/home/%s/logs/varnish-cache/', $currentUser);
+    $varnishPurgeLogfile = sprintf('%s/purge.log', rtrim($logDirectory, '/'));
+
+    if (true === file_exists($settingsFile)) {
+        if (false === file_exists($logDirectory)) {
+            @mkdir($logDirectory, 0770, true);
+        }
+        $settings = json_decode(file_get_contents($settingsFile), true);
+        $varnishEnabled = (true === isset($settings['enabled']) && true === $settings['enabled'] ? true : false);
+        $varnishServer = (true === isset($settings['server']) ? $settings['server'] : '');
+        $varnishCacheTagPrefix = (true === isset($settings['cacheTagPrefix']) ? $settings['cacheTagPrefix'] : '');
+        $varnishCacheLifetime = (true === isset($settings['cacheLifetime']) ? (int)$settings['cacheLifetime'] : 0);
+        $varnishCacheExcludes = (true === isset($settings['excludes']) && true === is_array($settings['excludes']) ? $settings['excludes'] : []);
+        $varnishCacheExcludedParams = (true === isset($settings['excludedParams']) && true === is_array($settings['excludedParams']) ? $settings['excludedParams'] : []);
+        $clpVarnish = new ClpVarnish();
+        $clpVarnish->setEnabled($varnishEnabled);
+        $clpVarnish->setDeveloperMode(VARNISH_DEVELOPER_MODE);
+        $clpVarnish->setPurgeLogfile($varnishPurgeLogfile);
+        $clpVarnish->setServer($varnishServer);
+        $clpVarnish->setCacheTagPrefix($varnishCacheTagPrefix);
+        $clpVarnish->setCacheLifetime($varnishCacheLifetime);
+        $clpVarnish->setExcludes($varnishCacheExcludes);
+        $clpVarnish->setExcludedParams($varnishCacheExcludedParams);
+        $headerRegisterCallback = function () use ($clpVarnish) {
+            $cacheTagPrefix = $clpVarnish->getCacheTagPrefix();
+            $clpVarnish->sendCacheHeaders();
+        };
+        $registerShutdownCallback = function () use ($clpVarnish) {
+            $cacheTagPrefix = $clpVarnish->getCacheTagPrefix();
+            $clpVarnish->shutdownPurge();
+        };
+        header_register_callback($headerRegisterCallback);
+        register_shutdown_function($registerShutdownCallback);
     }
-    $settings = json_decode(file_get_contents($settingsFile), true);
-    $varnishEnabled = (true === isset($settings['enabled']) && true === $settings['enabled'] ? true : false);
-    $varnishServer = (true === isset($settings['server']) ? $settings['server'] : '');
-    $varnishCacheTagPrefix = (true === isset($settings['cacheTagPrefix']) ? $settings['cacheTagPrefix'] : '');
-    $varnishCacheLifetime = (true === isset($settings['cacheLifetime']) ? (int)$settings['cacheLifetime'] : 0);
-    $varnishCacheExcludes = (true === isset($settings['excludes']) && true === is_array($settings['excludes']) ? $settings['excludes'] : []);
-    $varnishCacheExcludedParams = (true === isset($settings['excludedParams']) && true === is_array($settings['excludedParams']) ? $settings['excludedParams'] : []);
-    $clpVarnish = new ClpVarnish();
-    $clpVarnish->setEnabled($varnishEnabled);
-    $clpVarnish->setDeveloperMode(VARNISH_DEVELOPER_MODE);
-    $clpVarnish->setPurgeLogfile($varnishPurgeLogfile);
-    $clpVarnish->setServer($varnishServer);
-    $clpVarnish->setCacheTagPrefix($varnishCacheTagPrefix);
-    $clpVarnish->setCacheLifetime($varnishCacheLifetime);
-    $clpVarnish->setExcludes($varnishCacheExcludes);
-    $clpVarnish->setExcludedParams($varnishCacheExcludedParams);
-    $headerRegisterCallback = function() use ($clpVarnish) {
-        $cacheTagPrefix = $clpVarnish->getCacheTagPrefix();
-        $clpVarnish->sendCacheHeaders();
-    };
-    $registerShutdownCallback = function() use ($clpVarnish) {
-        $cacheTagPrefix = $clpVarnish->getCacheTagPrefix();
-        $clpVarnish->shutdownPurge();
-    };
-    header_register_callback($headerRegisterCallback);
-    register_shutdown_function($registerShutdownCallback);
-}
+});

@@ -6,12 +6,6 @@
 define('VARNISH_DEVELOPER_MODE', false);
 define('VARNISH_WORDPRESS_CONTROLLER_VERSION', '0.0.1');
 
-$currentUser = get_current_user();
-$currentDirectory = sprintf('%s/', rtrim(dirname(__FILE__), '/'));
-$settingsFile = sprintf('%s/settings.json', rtrim($currentDirectory, '/'));
-$logDirectory = sprintf('/home/%s/logs/varnish-cache/', $currentUser);
-$varnishPurgeLogfile = sprintf('%s/purge.log', rtrim($logDirectory, '/'));
-
 class ClpVarnish
 {
     private $enabled = false;
@@ -241,86 +235,94 @@ class ClpVarnish
             $dateTime = new \DateTime('now', new \DateTimeZone('UTC'));
             $logMessage = sprintf('%s, %s', $dateTime->format('Y-m-d H:i:s'), print_r($data, true));
             $purgeLogfile = $this->getPurgeLogfile();
-            file_put_contents($purgeLogfile, $logMessage.PHP_EOL, FILE_APPEND | LOCK_EX);
+            file_put_contents($purgeLogfile, $logMessage . PHP_EOL, FILE_APPEND | LOCK_EX);
         }
     }
 }
 
-if (true === file_exists($settingsFile)) {
-    if (false === file_exists($logDirectory)) {
-        @mkdir($logDirectory, 0770, true);
-    }
-    $settings = json_decode(file_get_contents($settingsFile), true);
-    $varnishEnabled = (true === isset($settings['enabled']) && true === $settings['enabled'] ? true : false);
-    $varnishServer = (true === isset($settings['server']) ? $settings['server'] : '');
-    $varnishCacheTagPrefix = (true === isset($settings['cacheTagPrefix']) ? $settings['cacheTagPrefix'] : '');
-    $varnishCacheLifetime = (true === isset($settings['cacheLifetime']) ? (int)$settings['cacheLifetime'] : 0);
-    $varnishCacheExcludes = (true === isset($settings['excludes']) && true === is_array($settings['excludes']) ? $settings['excludes'] : []);
-    $varnishCacheExcludedParams = (true === isset($settings['excludedParams']) && true === is_array($settings['excludedParams']) ? $settings['excludedParams'] : []);
-    $clpVarnish = new ClpVarnish();
-    $clpVarnish->setEnabled($varnishEnabled);
-    $clpVarnish->setDeveloperMode(VARNISH_DEVELOPER_MODE);
-    $clpVarnish->setPurgeLogfile($varnishPurgeLogfile);
-    $clpVarnish->setServer($varnishServer);
-    $clpVarnish->setCacheTagPrefix($varnishCacheTagPrefix);
-    $clpVarnish->setCacheLifetime($varnishCacheLifetime);
-    $clpVarnish->setExcludes($varnishCacheExcludes);
-    $clpVarnish->setExcludedParams($varnishCacheExcludedParams);
-    $headerRegisterCallback = function() use ($clpVarnish) {
-        $cacheTagPrefix = $clpVarnish->getCacheTagPrefix();
-        if (true === function_exists('get_bloginfo')) {
-            $wordPressVersion = get_bloginfo('version');
-            // Add cache tags
-            if (true === isset($GLOBALS['wp_query']) && true === isset($GLOBALS['wp_query']->posts)) {
-                $posts = $GLOBALS['wp_query']->posts;
-                if (false === empty($posts)) {
-                    foreach ($posts as $post) {
-                        if (true === isset($post->ID)) {
-                            $cacheTag = sprintf('%s-post-%s', $cacheTagPrefix, $post->ID);
-                            ClpVarnish::addCacheTag($cacheTag);
+call_user_func(function () {
+    $currentUser = get_current_user();
+    $currentDirectory = sprintf('%s/', rtrim(dirname(__FILE__), '/'));
+    $settingsFile = sprintf('%s/settings.json', rtrim($currentDirectory, '/'));
+    $logDirectory = sprintf('/home/%s/logs/varnish-cache/', $currentUser);
+    $varnishPurgeLogfile = sprintf('%s/purge.log', rtrim($logDirectory, '/'));
+
+    if (true === file_exists($settingsFile)) {
+        if (false === file_exists($logDirectory)) {
+            @mkdir($logDirectory, 0770, true);
+        }
+        $settings = json_decode(file_get_contents($settingsFile), true);
+        $varnishEnabled = (true === isset($settings['enabled']) && true === $settings['enabled'] ? true : false);
+        $varnishServer = (true === isset($settings['server']) ? $settings['server'] : '');
+        $varnishCacheTagPrefix = (true === isset($settings['cacheTagPrefix']) ? $settings['cacheTagPrefix'] : '');
+        $varnishCacheLifetime = (true === isset($settings['cacheLifetime']) ? (int)$settings['cacheLifetime'] : 0);
+        $varnishCacheExcludes = (true === isset($settings['excludes']) && true === is_array($settings['excludes']) ? $settings['excludes'] : []);
+        $varnishCacheExcludedParams = (true === isset($settings['excludedParams']) && true === is_array($settings['excludedParams']) ? $settings['excludedParams'] : []);
+        $clpVarnish = new ClpVarnish();
+        $clpVarnish->setEnabled($varnishEnabled);
+        $clpVarnish->setDeveloperMode(VARNISH_DEVELOPER_MODE);
+        $clpVarnish->setPurgeLogfile($varnishPurgeLogfile);
+        $clpVarnish->setServer($varnishServer);
+        $clpVarnish->setCacheTagPrefix($varnishCacheTagPrefix);
+        $clpVarnish->setCacheLifetime($varnishCacheLifetime);
+        $clpVarnish->setExcludes($varnishCacheExcludes);
+        $clpVarnish->setExcludedParams($varnishCacheExcludedParams);
+        $headerRegisterCallback = function () use ($clpVarnish) {
+            $cacheTagPrefix = $clpVarnish->getCacheTagPrefix();
+            if (true === function_exists('get_bloginfo')) {
+                $wordPressVersion = get_bloginfo('version');
+                // Add cache tags
+                if (true === isset($GLOBALS['wp_query']) && true === isset($GLOBALS['wp_query']->posts)) {
+                    $posts = $GLOBALS['wp_query']->posts;
+                    if (false === empty($posts)) {
+                        foreach ($posts as $post) {
+                            if (true === isset($post->ID)) {
+                                $cacheTag = sprintf('%s-post-%s', $cacheTagPrefix, $post->ID);
+                                ClpVarnish::addCacheTag($cacheTag);
+                            }
                         }
                     }
                 }
             }
-        }
-        $clpVarnish->sendCacheHeaders();
-    };
-    $registerShutdownCallback = function() use ($clpVarnish) {
-        $cacheTagPrefix = $clpVarnish->getCacheTagPrefix();
-        if (true === function_exists('get_bloginfo')) {
-            $wordPressVersion = get_bloginfo('version');
-            // Listen for purge requests for WordPress >= 6.0
-            if (true === version_compare($wordPressVersion,'6.0', '>=')) {
-                $jsonResponse = file_get_contents('php://input');
-                if (false === empty($jsonResponse)) {
-                    $jsonResponse = @json_decode($jsonResponse, true);
-                    if (true === isset($jsonResponse['id']) && false === empty($jsonResponse['id'])) {
-                        $purgeTag = sprintf('%s-post-%s', $cacheTagPrefix, $jsonResponse['id']);
+            $clpVarnish->sendCacheHeaders();
+        };
+        $registerShutdownCallback = function () use ($clpVarnish) {
+            $cacheTagPrefix = $clpVarnish->getCacheTagPrefix();
+            if (true === function_exists('get_bloginfo')) {
+                $wordPressVersion = get_bloginfo('version');
+                // Listen for purge requests for WordPress >= 6.0
+                if (true === version_compare($wordPressVersion, '6.0', '>=')) {
+                    $jsonResponse = file_get_contents('php://input');
+                    if (false === empty($jsonResponse)) {
+                        $jsonResponse = @json_decode($jsonResponse, true);
+                        if (true === isset($jsonResponse['id']) && false === empty($jsonResponse['id'])) {
+                            $purgeTag = sprintf('%s-post-%s', $cacheTagPrefix, $jsonResponse['id']);
+                            $clpVarnish->addTagsToPurge([$purgeTag]);
+                        }
+                    }
+                } else { // Listen for purge requests for WordPress < 6.0
+                    if (true === isset($_POST['post_id']) && false === empty($_POST['post_id'])) {
+                        $postId = (int)$_POST['post_id'];
+                        $purgeTag = sprintf('%s-post-%s', $cacheTagPrefix, $postId);
                         $clpVarnish->addTagsToPurge([$purgeTag]);
                     }
                 }
-            } else { // Listen for purge requests for WordPress < 6.0
-                if (true === isset($_POST['post_id']) && false === empty($_POST['post_id'])) {
-                    $postId = (int)$_POST['post_id'];
+                // WooCommerce
+                // Product Update
+                if (true === isset($_POST['post_ID']) && false === empty($_POST['post_ID'])) {
+                    $postId = (int)$_POST['post_ID'];
                     $purgeTag = sprintf('%s-post-%s', $cacheTagPrefix, $postId);
                     $clpVarnish->addTagsToPurge([$purgeTag]);
                 }
+                // Category Update
+                if (true === isset($_POST['taxonomy']) && 'product_cat' == $_POST['taxonomy'] && true === isset($_POST['tag_ID'])) {
+                    // Purge everything when a category gets updated, as it affects all sites.
+                    $clpVarnish->addTagsToPurge([$cacheTagPrefix]);
+                }
             }
-            // WooCommerce
-            // Product Update
-            if (true === isset($_POST['post_ID']) && false === empty($_POST['post_ID'])) {
-                $postId = (int)$_POST['post_ID'];
-                $purgeTag = sprintf('%s-post-%s', $cacheTagPrefix, $postId);
-                $clpVarnish->addTagsToPurge([$purgeTag]);
-            }
-            // Category Update
-            if (true === isset($_POST['taxonomy']) && 'product_cat' == $_POST['taxonomy'] && true === isset($_POST['tag_ID'])) {
-                // Purge everything when a category gets updated, as it affects all sites.
-                $clpVarnish->addTagsToPurge([$cacheTagPrefix]);
-            }
-        }
-        $clpVarnish->shutdownPurge();
-    };
-    header_register_callback($headerRegisterCallback);
-    register_shutdown_function($registerShutdownCallback);
-}
+            $clpVarnish->shutdownPurge();
+        };
+        header_register_callback($headerRegisterCallback);
+        register_shutdown_function($registerShutdownCallback);
+    }
+});
